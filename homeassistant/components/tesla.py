@@ -7,14 +7,14 @@ https://home-assistant.io/components/tesla/
 from collections import defaultdict
 import logging
 
-import voluptuous as vol
-
 from homeassistant.const import (
-    ATTR_BATTERY_LEVEL, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME)
+    ATTR_BATTERY_LEVEL, CONF_API_KEY, CONF_PASSWORD, CONF_SCAN_INTERVAL,
+    CONF_USERNAME)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import discovery
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import slugify
+import voluptuous as vol
 
 REQUIREMENTS = ['teslajsonpy==0.0.23']
 
@@ -25,14 +25,20 @@ _LOGGER = logging.getLogger(__name__)
 TESLA_ID_FORMAT = '{}_{}'
 TESLA_ID_LIST_SCHEMA = vol.Schema([int])
 
+CONF_MILES = 'miles'
+CONF_RATED = 'rated'
+
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
+        vol.Optional(CONF_API_KEY): cv.string,
+        vol.Optional(CONF_MILES, default=False): cv.boolean,
+        vol.Optional(CONF_RATED, default=False): cv.boolean,
+        vol.Inclusive(CONF_USERNAME, 'auth'): cv.string,
+        vol.Inclusive(CONF_PASSWORD, 'auth'): cv.string,
         vol.Optional(CONF_SCAN_INTERVAL, default=300):
             vol.All(cv.positive_int, vol.Clamp(min=300)),
     }),
-}, extra=vol.ALLOW_EXTRA)
+}, cv.has_at_least_one_key(CONF_API_KEY, CONF_USERNAME), extra=vol.ALLOW_EXTRA)
 
 NOTIFICATION_ID = 'tesla_integration_notification'
 NOTIFICATION_TITLE = 'Tesla integration setup'
@@ -51,10 +57,18 @@ def setup(hass, base_config):
     email = config.get(CONF_USERNAME)
     password = config.get(CONF_PASSWORD)
     update_interval = config.get(CONF_SCAN_INTERVAL)
+    teslafi_key = config.get(CONF_API_KEY)
+    miles = config.get(CONF_MILES)
+    rated = config.get(CONF_RATED)
     if hass.data.get(DOMAIN) is None:
         try:
             hass.data[DOMAIN] = {
-                'controller': teslaAPI(email, password, update_interval),
+                'controller': teslaAPI(
+                    email=email,
+                    password=password,
+                    teslafi=teslafi_key,
+                    update_interval=update_interval,
+                    miles=miles, rated=rated),
                 'devices': defaultdict(list)
             }
             _LOGGER.debug("Connected to the Tesla API.")
